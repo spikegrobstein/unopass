@@ -1,0 +1,148 @@
+#! /usr/bin/env bash
+
+set -euo pipefail
+
+prompt_for_type() {
+  op list templates \
+    | jq \
+      --raw-output \
+      '.[] | "\( .uuid )\t\( .name )"' \
+    | fzf \
+      --with-nth=2 \
+      --delimiter=$'\t' \
+    | awk '{ print $1 }'
+}
+
+prompt_for_item_by_template() {
+  local template_uuid="$1"
+
+  filter_items_for_template "$template_uuid" \
+    | fzf \
+      --with-nth=2 \
+      --delimiter=$'\t' \
+    | awk '{ print $1 }'
+}
+
+filter_items_for_template() {
+  local template_uuid="$1"
+
+  op list items \
+    | jq \
+      --raw-output \
+      --arg uuid "$template_uuid" \
+      'sort_by(.overview.title)[] | select(.templateUuid == $uuid) | "\( .uuid )\t\( .overview.title )"'
+}
+
+get_item() {
+  local item_uuid="$1"
+
+  op get item "$item_uuid"
+}
+
+show_item() {
+  local item_uuid="$1"
+  local template="$2"
+
+  local item="$( get_item "$item_uuid" )"
+
+  case "$template" in
+    001) # login
+      show_login_item "$item"
+      ;;
+    *)
+      jq <<< "$item"
+  esac
+}
+
+item_has_totp() {
+  local data="$1"
+
+  jq \
+    --exit-status \
+    '.details.sections[] | select( .fields.t == "one-time password" )'
+}
+
+show_login_item() {
+  local data="$1"
+
+  local uuid="$( jq --raw-output '.uuid' <<< "$data" )"
+
+  local username
+  username="$( jq --raw-output '.details.fields[] | select(.designation == "username").value' <<< "$data" )"
+
+  local password
+  password="$( jq --raw-output '.details.fields[] | select(.designation == "password").value' <<< "$data" )"
+
+  local url
+  url="$( jq --raw-output '.overview.url' <<< "$data" )"
+
+  jq \
+    --arg username "$username" \
+    --arg url "$url" \
+    --arg uuid "$uuid" \
+    --raw-output \
+    '"\( .overview.title )
+  UUID:     \( $uuid )
+  Username: \( $username )
+  Site:     \( $url )
+  "' <<< "$data"
+
+  local totp
+
+  while true; do
+    printf "  %s\n" \
+      "[p] copy password" \
+      "[u] copy username" \
+      "[t] totp" \
+      "[o] open URL" \
+      "[q] quit" \
+      "" >&2
+
+    local REPLY
+    read -rsn1
+
+    case "$REPLY" in
+      p)
+        xclip <<< "$password"
+        echo "Copied password" >&2
+        ;;
+      u)
+        xclip <<< "$username"
+        echo "Copied username" >&2
+        ;;
+      t)
+        totp="$( op get totp "$uuid" )"
+        xclip <<< "$totp"
+        echo "Copied TOTP" >&2
+      
+        ;;
+      o)
+        xdg-open "$url"
+        ;;
+      q)
+        break
+        ;;
+      *)
+        echo "invalid." >&2
+    esac
+
+    echo "" >&2
+  done
+}
+
+ttype="${1:-}"
+
+if [[ -n "$ttype" ]]; then
+  case "$ttype" in
+    login)
+      ttype=001
+      ;;
+  esac
+else
+  ttype="$( prompt_for_type )"
+fi
+
+item_uuid="$( prompt_for_item_by_template "$ttype" )"
+
+show_item "$item_uuid" "$ttype"
+
