@@ -63,16 +63,27 @@ item_has_totp() {
     <<< "$data"
 }
 
+item_get_field() {
+  local field="$1"
+  local data="$2"
+
+  jq \
+    --raw-output \
+    --arg field "$field" \
+    '.details.fields[] | limit(1; select(.designation == $field)).value' \
+    <<< "$data"
+}
+
 show_login_item() {
   local data="$1"
 
   local uuid="$( jq --raw-output '.uuid' <<< "$data" )"
 
   local username
-  username="$( jq --raw-output '.details.fields[] | select(.designation == "username").value' <<< "$data" )"
+  username="$( item_get_field 'username' "$data" )"
 
   local password
-  password="$( jq --raw-output '.details.fields[] | select(.designation == "password").value' <<< "$data" )"
+  password="$( item_get_field 'password' "$data" )"
 
   local url
   url="$( jq --raw-output '.overview.url' <<< "$data" )"
