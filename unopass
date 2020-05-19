@@ -7,6 +7,7 @@ prompt_for_type() {
     | jq \
       --raw-output \
       '.[] | "\( .uuid )\t\( .name )"' \
+    | sort \
     | fzf \
       --with-nth=2 \
       --delimiter=$'\t' \
