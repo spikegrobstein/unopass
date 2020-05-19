@@ -59,7 +59,8 @@ item_has_totp() {
 
   jq \
     --exit-status \
-    '.details.sections[] | select( .fields.t == "one-time password" )'
+    '.details.sections[] | select( .fields.t == "one-time password" )' \
+    <<< "$data"
 }
 
 show_login_item() {
@@ -88,16 +89,30 @@ show_login_item() {
   "' <<< "$data"
 
   local totp
+  local has_totp=0
+
+  if item_has_totp "$data"; then
+    has_totp=1
+  fi
+
+  local options=(
+    "[p] copy password"
+    "[u] copy username"
+  )
+
+  # only include this if the entry has a TOTP password.
+  if (( has_totp )); then
+    options+=( "[t] totp" )
+  fi
+
+  options+=(
+    "[d] dump"
+    "[o] open URL"
+    "[q] quit"
+  )
 
   while true; do
-    printf "  %s\n" \
-      "[p] copy password" \
-      "[u] copy username" \
-      "[t] totp" \
-      "[d] dump" \
-      "[o] open URL" \
-      "[q] quit" \
-      "" >&2
+    printf "  %s\n" "${options[@]}" "" >&2
 
     local REPLY
     read -rsn1
@@ -112,9 +127,13 @@ show_login_item() {
         echo "Copied username" >&2
         ;;
       t)
-        totp="$( op get totp "$uuid" )"
-        xclip <<< "$totp"
-        echo "Copied TOTP" >&2
+        if (( has_totp )); then
+          totp="$( op get totp "$uuid" )"
+          xclip <<< "$totp"
+          echo "Copied TOTP" >&2
+        else
+          echo "Item does not have TOTP." >&2
+        fi
         ;;
       d)
         jq . <<< "$data"
