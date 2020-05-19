@@ -94,6 +94,7 @@ show_login_item() {
       "[p] copy password" \
       "[u] copy username" \
       "[t] totp" \
+      "[d] dump" \
       "[o] open URL" \
       "[q] quit" \
       "" >&2
@@ -114,7 +115,9 @@ show_login_item() {
         totp="$( op get totp "$uuid" )"
         xclip <<< "$totp"
         echo "Copied TOTP" >&2
-      
+        ;;
+      d)
+        jq . <<< "$data"
         ;;
       o)
         xdg-open "$url"
